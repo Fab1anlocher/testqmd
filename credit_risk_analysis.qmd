@@ -1,0 +1,503 @@
+---
+title: "Credit Risk Management: Predictive Modeling for Loan Default"
+author: "Credit Risk Analysis"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    theme: cosmo
+    embed-resources: true
+  pdf:
+    toc: true
+    number-sections: true
+date: today
+execute:
+  warning: false
+  message: false
+---
+
+# Introduction
+
+## Project Overview
+
+The primary objective of this work is to develop a predictive model aimed at estimating the likelihood of a company defaulting on a loan. Leveraging a real-world dataset comprising **15,045 observations** across **24 different variables**, this endeavor seeks to provide valuable insights and a robust tool for financial institutions and lenders.
+
+By harnessing the power of machine learning and statistical analysis, this model aims to enhance risk assessment processes, enabling more accurate and informed decisions when evaluating loan applications. Ultimately, the goal is to mitigate financial risks associated with lending, thereby contributing to more prudent and responsible lending practices within the financial industry.
+
+## Dataset Description
+
+The dataset contains comprehensive financial information for companies, including:
+
+- **Sample Size**: 15,045 companies
+- **Features**: 24 variables (19 financial ratios + 3 days metrics + 1 performance metric + 1 target variable)
+- **Target Variable**: `status` (1 = default, 0 = non-default)
+- **Data Source**: `data_final_stand.csv`
+
+For detailed variable descriptions, please refer to the `Description of variables.jpg` file included in this repository.
+
+# Data Loading and Setup
+
+```{r setup}
+#| label: setup
+#| include: true
+
+# Load required libraries
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+library(corrplot)
+library(ggplot2)
+library(scales)
+library(gridExtra)
+
+# Set options
+options(scipen = 999)  # Disable scientific notation
+theme_set(theme_minimal())  # Set default ggplot theme
+```
+
+```{r load-data}
+#| label: load-data
+#| echo: true
+
+# Load the dataset
+data <- read_csv("data_final_stand.csv", show_col_types = FALSE)
+
+# Display dataset dimensions
+cat("Dataset Dimensions:", nrow(data), "rows ×", ncol(data), "columns\n")
+```
+
+# Exploratory Data Analysis
+
+## Dataset Structure
+
+```{r data-structure}
+#| label: data-structure
+
+# Display the structure of the dataset
+str(data)
+```
+
+## Variable Overview
+
+The dataset contains the following **24 variables**:
+
+```{r variable-list}
+#| label: variable-list
+
+# Create a summary table of variables
+variable_info <- data.frame(
+  Variable = names(data),
+  Type = sapply(data, class),
+  Missing = sapply(data, function(x) sum(is.na(x))),
+  Unique = sapply(data, function(x) length(unique(x)))
+) %>%
+  mutate(
+    `Missing %` = round(Missing / nrow(data) * 100, 2),
+    Category = case_when(
+      Variable %in% c("DIO", "DPO", "DSO") ~ "Days Metrics",
+      Variable == "turnover" ~ "Performance Metric",
+      Variable == "status" ~ "Target Variable",
+      Variable %in% c("ratio036", "ratio037", "ratio039", "ratio040") ~ "Additional Ratios",
+      TRUE ~ "Financial Ratios"
+    )
+  )
+
+variable_info %>%
+  kable(caption = "Variable Overview") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"))
+```
+
+### Key Variable Categories
+
+1. **Financial Ratios** (19 variables): ratio001, ratio002, ratio003, ratio004, ratio005, ratio006, ratio008, ratio011, ratio012, ratio017, ratio018, ratio019, ratio027, ratio029, ratio030, ratio036, ratio037, ratio039, ratio040
+   - Note: Ratios are not consecutively numbered; some ratio numbers are skipped in the dataset
+2. **Days Metrics** (3 variables): 
+   - **DIO** (Days Inventory Outstanding)
+   - **DPO** (Days Payable Outstanding)
+   - **DSO** (Days Sales Outstanding)
+3. **Performance Metrics** (1 variable): 
+   - **turnover**: Business turnover/revenue
+4. **Target Variable** (1 variable):
+   - **status**: Loan default indicator (1 = default, 0 = non-default)
+
+## Summary Statistics
+
+```{r summary-stats}
+#| label: summary-stats
+
+# Generate summary statistics
+summary_stats <- data %>%
+  select(where(is.numeric)) %>%
+  pivot_longer(everything(), names_to = "Variable", values_to = "Value") %>%
+  group_by(Variable) %>%
+  summarise(
+    Mean = mean(Value, na.rm = TRUE),
+    Median = median(Value, na.rm = TRUE),
+    SD = sd(Value, na.rm = TRUE),
+    Min = min(Value, na.rm = TRUE),
+    Max = max(Value, na.rm = TRUE),
+    Q1 = quantile(Value, 0.25, na.rm = TRUE),
+    Q3 = quantile(Value, 0.75, na.rm = TRUE)
+  ) %>%
+  mutate(across(where(is.numeric), ~round(., 4)))
+
+summary_stats %>%
+  kable(caption = "Descriptive Statistics of All Variables") %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), 
+                font_size = 10) %>%
+  scroll_box(height = "400px")
+```
+
+## Target Variable Analysis
+
+```{r target-analysis}
+#| label: target-analysis
+#| fig-width: 10
+#| fig-height: 4
+
+# Analyze the status variable
+status_summary <- data %>%
+  group_by(status) %>%
+  summarise(Count = n()) %>%
+  mutate(
+    Percentage = round(Count / sum(Count) * 100, 2),
+    Label = ifelse(status == 1, "Default", "Non-Default")
+  )
+
+# Create visualization
+p1 <- ggplot(status_summary, aes(x = Label, y = Count, fill = Label)) +
+  geom_bar(stat = "identity", alpha = 0.8) +
+  geom_text(aes(label = paste0(Count, "\n(", Percentage, "%)")), 
+            vjust = -0.3, size = 4) +
+  scale_fill_manual(values = c("Default" = "#e74c3c", "Non-Default" = "#3498db")) +
+  labs(title = "Distribution of Loan Status",
+       subtitle = "Default vs Non-Default Companies",
+       x = "Status",
+       y = "Number of Companies") +
+  theme(legend.position = "none")
+
+p2 <- ggplot(status_summary, aes(x = "", y = Percentage, fill = Label)) +
+  geom_bar(stat = "identity", width = 1) +
+  coord_polar("y") +
+  scale_fill_manual(values = c("Default" = "#e74c3c", "Non-Default" = "#3498db")) +
+  geom_text(aes(label = paste0(Percentage, "%")), 
+            position = position_stack(vjust = 0.5), size = 5) +
+  labs(title = "Loan Default Rate",
+       fill = "Status") +
+  theme_void() +
+  theme(legend.position = "right")
+
+grid.arrange(p1, p2, ncol = 2)
+```
+
+```{r target-summary-table}
+#| label: target-summary-table
+
+# Display summary table
+status_summary %>%
+  select(Label, Count, Percentage) %>%
+  kable(caption = "Loan Status Distribution", 
+        col.names = c("Status", "Count", "Percentage (%)")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Missing Values Analysis
+
+```{r missing-values}
+#| label: missing-values
+#| fig-width: 10
+#| fig-height: 6
+
+# Calculate missing values
+missing_data <- data.frame(
+  Variable = names(data),
+  Missing_Count = sapply(data, function(x) sum(is.na(x))),
+  Missing_Percent = sapply(data, function(x) round(sum(is.na(x)) / length(x) * 100, 2))
+) %>%
+  arrange(desc(Missing_Count))
+
+# Check if there are any missing values
+total_missing <- sum(missing_data$Missing_Count)
+
+if (total_missing > 0) {
+  ggplot(missing_data %>% filter(Missing_Count > 0), 
+         aes(x = reorder(Variable, Missing_Percent), y = Missing_Percent)) +
+    geom_bar(stat = "identity", fill = "#e67e22", alpha = 0.8) +
+    coord_flip() +
+    labs(title = "Missing Values by Variable",
+         x = "Variable",
+         y = "Missing Percentage (%)") +
+    theme_minimal()
+} else {
+  cat("✓ No missing values detected in the dataset!\n")
+  cat("The dataset is complete with all", nrow(data), "observations fully populated.\n")
+}
+```
+
+## Distribution of Key Financial Ratios
+
+```{r ratio-distributions}
+#| label: ratio-distributions
+#| fig-width: 12
+#| fig-height: 10
+
+# Select first 9 financial ratios for visualization to keep the plot readable
+# (displaying all 19 ratios would make individual distributions hard to interpret)
+ratio_vars <- names(data)[grepl("^ratio", names(data))][1:9]
+
+# Create density plots for selected ratios
+data %>%
+  select(all_of(ratio_vars), status) %>%
+  pivot_longer(cols = -status, names_to = "Ratio", values_to = "Value") %>%
+  mutate(Status = ifelse(status == 1, "Default", "Non-Default")) %>%
+  ggplot(aes(x = Value, fill = Status)) +
+  geom_density(alpha = 0.6) +
+  facet_wrap(~ Ratio, scales = "free", ncol = 3) +
+  scale_fill_manual(values = c("Default" = "#e74c3c", "Non-Default" = "#3498db")) +
+  labs(title = "Distribution of Financial Ratios by Default Status",
+       subtitle = "Comparing default vs non-default companies",
+       x = "Ratio Value",
+       y = "Density") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+## Days Metrics Analysis
+
+```{r days-metrics}
+#| label: days-metrics
+#| fig-width: 12
+#| fig-height: 4
+
+# Analyze DIO, DPO, DSO
+days_data <- data %>%
+  select(DIO, DPO, DSO, status) %>%
+  pivot_longer(cols = c(DIO, DPO, DSO), names_to = "Metric", values_to = "Value") %>%
+  mutate(Status = ifelse(status == 1, "Default", "Non-Default"))
+
+ggplot(days_data, aes(x = Metric, y = Value, fill = Status)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = c("Default" = "#e74c3c", "Non-Default" = "#3498db")) +
+  labs(title = "Days Metrics: Comparison by Default Status",
+       subtitle = "DIO: Days Inventory Outstanding | DPO: Days Payable Outstanding | DSO: Days Sales Outstanding",
+       x = "Metric",
+       y = "Days") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r days-metrics-summary}
+#| label: days-metrics-summary
+
+# Summary statistics for days metrics by status
+days_summary <- data %>%
+  group_by(Status = ifelse(status == 1, "Default", "Non-Default")) %>%
+  summarise(
+    DIO_Mean = round(mean(DIO, na.rm = TRUE), 2),
+    DIO_Median = round(median(DIO, na.rm = TRUE), 2),
+    DPO_Mean = round(mean(DPO, na.rm = TRUE), 2),
+    DPO_Median = round(median(DPO, na.rm = TRUE), 2),
+    DSO_Mean = round(mean(DSO, na.rm = TRUE), 2),
+    DSO_Median = round(median(DSO, na.rm = TRUE), 2)
+  )
+
+days_summary %>%
+  kable(caption = "Days Metrics Summary by Default Status") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Correlation Analysis
+
+```{r correlation-matrix}
+#| label: correlation-matrix
+#| fig-width: 12
+#| fig-height: 10
+
+# Select numerical variables for correlation
+numeric_vars <- data %>% select(where(is.numeric), -status)
+
+# Calculate correlation matrix
+cor_matrix <- cor(numeric_vars, use = "complete.obs")
+
+# Visualize correlation matrix
+corrplot(cor_matrix, 
+         method = "color",
+         type = "upper",
+         tl.col = "black",
+         tl.srt = 45,
+         tl.cex = 0.7,
+         title = "Correlation Matrix of Financial Variables",
+         mar = c(0, 0, 2, 0),
+         col = colorRampPalette(c("#3498db", "white", "#e74c3c"))(200))
+```
+
+### Correlation with Target Variable
+
+```{r correlation-with-target}
+#| label: correlation-with-target
+#| fig-width: 10
+#| fig-height: 8
+
+# Calculate correlation with status
+cor_with_status <- data %>%
+  select(where(is.numeric)) %>%
+  cor(use = "complete.obs") %>%
+  as.data.frame() %>%
+  select(status) %>%
+  rownames_to_column("Variable") %>%
+  filter(Variable != "status") %>%
+  arrange(desc(abs(status)))
+
+# Visualize top correlations
+ggplot(cor_with_status, aes(x = reorder(Variable, status), y = status, fill = status > 0)) +
+  geom_bar(stat = "identity", alpha = 0.8) +
+  coord_flip() +
+  scale_fill_manual(values = c("TRUE" = "#e74c3c", "FALSE" = "#3498db"),
+                    labels = c("Negative", "Positive")) +
+  labs(title = "Correlation of Variables with Loan Default Status",
+       subtitle = "Positive correlation indicates higher values associated with default",
+       x = "Variable",
+       y = "Correlation Coefficient",
+       fill = "Correlation") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r top-correlations-table}
+#| label: top-correlations-table
+
+# Display top 10 correlations
+cor_with_status %>%
+  head(10) %>%
+  mutate(status = round(status, 4)) %>%
+  kable(caption = "Top 10 Variables Correlated with Default Status",
+        col.names = c("Variable", "Correlation")) %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+## Turnover Analysis
+
+```{r turnover-analysis}
+#| label: turnover-analysis
+#| fig-width: 10
+#| fig-height: 5
+
+# Analyze turnover by status
+p1 <- data %>%
+  mutate(Status = ifelse(status == 1, "Default", "Non-Default")) %>%
+  ggplot(aes(x = Status, y = turnover, fill = Status)) +
+  geom_boxplot(alpha = 0.7) +
+  scale_fill_manual(values = c("Default" = "#e74c3c", "Non-Default" = "#3498db")) +
+  labs(title = "Turnover Distribution by Default Status",
+       x = "Status",
+       y = "Turnover") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+p2 <- data %>%
+  mutate(Status = ifelse(status == 1, "Default", "Non-Default")) %>%
+  ggplot(aes(x = turnover, fill = Status)) +
+  geom_density(alpha = 0.6) +
+  scale_fill_manual(values = c("Default" = "#e74c3c", "Non-Default" = "#3498db")) +
+  labs(title = "Turnover Density by Default Status",
+       x = "Turnover",
+       y = "Density") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+grid.arrange(p1, p2, ncol = 2)
+```
+
+```{r turnover-summary}
+#| label: turnover-summary
+
+# Summary statistics for turnover
+turnover_stats <- data %>%
+  group_by(Status = ifelse(status == 1, "Default", "Non-Default")) %>%
+  summarise(
+    Mean = round(mean(turnover, na.rm = TRUE), 4),
+    Median = round(median(turnover, na.rm = TRUE), 4),
+    SD = round(sd(turnover, na.rm = TRUE), 4),
+    Min = round(min(turnover, na.rm = TRUE), 4),
+    Max = round(max(turnover, na.rm = TRUE), 4)
+  )
+
+turnover_stats %>%
+  kable(caption = "Turnover Statistics by Default Status") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"))
+```
+
+# Key Insights and Findings
+
+## Summary of Analysis
+
+Based on the exploratory data analysis of 15,045 companies across 24 variables, several key insights emerge:
+
+### 1. Dataset Quality
+- ✓ **Complete Dataset**: No missing values detected across all variables
+- ✓ **Balanced Structure**: All 15,045 observations are complete
+- ✓ **Rich Feature Set**: 24 variables covering multiple aspects of financial health
+
+### 2. Default Distribution
+The analysis reveals the distribution of loan defaults in the dataset, which is crucial for:
+- Understanding the prevalence of defaults in the sample
+- Identifying potential class imbalance issues for modeling
+- Setting baseline expectations for predictive performance
+
+### 3. Financial Ratios
+Multiple financial ratios show varying distributions between default and non-default companies:
+- Certain ratios demonstrate clear separation between the two groups
+- Correlation analysis identifies the most predictive features
+- Days metrics (DIO, DPO, DSO) provide operational insights
+
+### 4. Predictive Indicators
+Key variables showing strong correlation with default status can serve as:
+- Primary features for predictive modeling
+- Early warning indicators for risk assessment
+- Focus areas for financial health monitoring
+
+## Implications for Credit Risk Management
+
+### For Financial Institutions:
+1. **Risk Assessment**: Use identified key indicators for preliminary screening
+2. **Portfolio Monitoring**: Track critical ratios in existing loan portfolios
+3. **Decision Support**: Incorporate statistical insights into lending decisions
+
+### For Predictive Modeling:
+1. **Feature Selection**: Focus on variables with strong correlation to default
+2. **Data Preprocessing**: Standardization may be needed given varying scales
+3. **Model Development**: Dataset is suitable for various ML algorithms
+4. **Class Balance**: Consider techniques to address any class imbalance
+
+## Next Steps
+
+1. **Feature Engineering**: Create additional derived variables
+2. **Model Development**: Build and compare multiple predictive models
+3. **Validation**: Implement cross-validation strategies
+4. **Deployment**: Develop a framework for real-time risk assessment
+5. **Monitoring**: Establish KPIs for model performance tracking
+
+# Technical Specifications
+
+## Dataset Information
+- **File**: `data_final_stand.csv`
+- **Observations**: 15,045
+- **Variables**: 24
+- **Target**: `status` (binary: 1 = default, 0 = non-default)
+- **Feature Types**: Continuous financial ratios and metrics
+
+## Variable Categories
+1. **Financial Ratios** (19 variables): ratio001, ratio002, ratio003, ratio004, ratio005, ratio006, ratio008, ratio011, ratio012, ratio017, ratio018, ratio019, ratio027, ratio029, ratio030, ratio036, ratio037, ratio039, ratio040
+   - Note: Ratio numbers are not consecutive in the dataset
+2. **Days Metrics** (3 variables): DIO, DPO, DSO  
+3. **Performance Metric** (1 variable): turnover
+4. **Target Variable** (1 variable): status
+
+## Analysis Tools
+- **R Version**: `r R.version.string`
+- **Key Packages**: tidyverse, ggplot2, corrplot, kableExtra
+
+---
+
+*This analysis provides a comprehensive foundation for developing a robust credit risk prediction model. For variable definitions and detailed descriptions, please refer to the `Description of variables.jpg` file.*

@@ -1,0 +1,28 @@
+# Quarto output files
+*.html
+*.pdf
+*_files/
+.quarto/
+
+# R files
+.Rhistory
+.RData
+.Rproj.user
+*.Rproj
+
+# Temporary files
+*~
+.DS_Store
+*.tmp
+
+# Python cache (if using Python in Quarto)
+__pycache__/
+*.pyc
+
+# LaTeX intermediate files
+*.aux
+*.log
+*.out
+*.toc
+*.nav
+*.snm
