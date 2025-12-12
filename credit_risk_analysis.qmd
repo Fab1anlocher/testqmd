@@ -242,7 +242,8 @@ if (total_missing > 0) {
 #| fig-width: 12
 #| fig-height: 10
 
-# Select first 9 financial ratios for visualization
+# Select first 9 financial ratios for visualization to keep the plot readable
+# (displaying all 19 ratios would make individual distributions hard to interpret)
 ratio_vars <- names(data)[grepl("^ratio", names(data))][1:9]
 
 # Create density plots for selected ratios
