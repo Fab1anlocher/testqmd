@@ -30,7 +30,7 @@ By harnessing the power of machine learning and statistical analysis, this model
 The dataset contains comprehensive financial information for companies, including:
 
 - **Sample Size**: 15,045 companies
-- **Features**: 24 variables (20 numerical ratios + 4 categorical variables)
+- **Features**: 24 variables (19 financial ratios + 3 days metrics + 1 performance metric + 1 target variable)
 - **Target Variable**: `status` (1 = default, 0 = non-default)
 - **Data Source**: `data_final_stand.csv`
 
@@ -110,16 +110,16 @@ variable_info %>%
 
 ### Key Variable Categories
 
-1. **Financial Ratios** (ratio001-ratio030): Various financial health indicators
-2. **Days Metrics**: 
+1. **Financial Ratios** (19 variables): ratio001, ratio002, ratio003, ratio004, ratio005, ratio006, ratio008, ratio011, ratio012, ratio017, ratio018, ratio019, ratio027, ratio029, ratio030, ratio036, ratio037, ratio039, ratio040
+   - Note: Ratios are not consecutively numbered; some ratio numbers are skipped in the dataset
+2. **Days Metrics** (3 variables): 
    - **DIO** (Days Inventory Outstanding)
    - **DPO** (Days Payable Outstanding)
    - **DSO** (Days Sales Outstanding)
-3. **Performance Metrics**: 
+3. **Performance Metrics** (1 variable): 
    - **turnover**: Business turnover/revenue
-4. **Target Variable**:
+4. **Target Variable** (1 variable):
    - **status**: Loan default indicator (1 = default, 0 = non-default)
-5. **Additional Ratios** (ratio036-ratio040): Supplementary financial indicators
 
 ## Summary Statistics
 
@@ -487,11 +487,11 @@ Key variables showing strong correlation with default status can serve as:
 - **Feature Types**: Continuous financial ratios and metrics
 
 ## Variable Categories
-1. **Financial Ratios** (16 variables): ratio001-ratio030
+1. **Financial Ratios** (19 variables): ratio001, ratio002, ratio003, ratio004, ratio005, ratio006, ratio008, ratio011, ratio012, ratio017, ratio018, ratio019, ratio027, ratio029, ratio030, ratio036, ratio037, ratio039, ratio040
+   - Note: Ratio numbers are not consecutive in the dataset
 2. **Days Metrics** (3 variables): DIO, DPO, DSO  
 3. **Performance Metric** (1 variable): turnover
 4. **Target Variable** (1 variable): status
-5. **Additional Ratios** (4 variables): ratio036-ratio040
 
 ## Analysis Tools
 - **R Version**: `r R.version.string`

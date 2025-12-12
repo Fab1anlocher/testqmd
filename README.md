@@ -38,8 +38,9 @@ The primary objectives of this work are to:
 
 The dataset includes **24 variables** organized into the following categories:
 
-### 1. Financial Ratios (16 variables)
-- `ratio001` through `ratio030` (selected ratios)
+### 1. Financial Ratios (19 variables)
+- **ratio001, ratio002, ratio003, ratio004, ratio005, ratio006, ratio008, ratio011, ratio012, ratio017, ratio018, ratio019, ratio027, ratio029, ratio030, ratio036, ratio037, ratio039, ratio040**
+- Note: Ratio numbers are not consecutive; some ratio identifiers are skipped in the dataset
 - Various financial health and performance indicators
 
 ### 2. Days Metrics (3 variables)
@@ -54,10 +55,6 @@ The dataset includes **24 variables** organized into the following categories:
 - **status**: Loan default indicator
   - `1` = Company defaulted on loan
   - `0` = Company did not default
-
-### 5. Additional Ratios (4 variables)
-- `ratio036`, `ratio037`, `ratio039`, `ratio040`
-- Supplementary financial indicators
 
 For detailed variable descriptions, refer to the `Description of variables.jpg` file.
 
